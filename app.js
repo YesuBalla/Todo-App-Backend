@@ -137,8 +137,8 @@ app.get("/todos/", authenticateToken, async (request, response) => {
   });
 
   app.post("/todos/", authenticateToken, async (request, response) => {
-    const { id, userId, title, priority, status, category} = request.body; 
-    console.log(id, userId, title, priority, status, category)
+    const { id, title, priority, status, category} = request.body; 
+    const { userId } = request;
   
     const addTodoQuery = `
       INSERT INTO
@@ -152,11 +152,160 @@ app.get("/todos/", authenticateToken, async (request, response) => {
     try {
       // Execute the query with parameters
       await db.run(addTodoQuery, [id, userId, title, priority, status, category]);
-      response.status(201).send("Todo Successfully Added");
+      response.status(200).send("Todo Successfully Added");
     } catch (error) {
       console.error('Error adding todo:', error);
       response.status(500).send("Error adding todo");
     }
   });
   
-  
+  // Update Todo API
+app.put("/todos/:todoId", authenticateToken, async (request, response) => {
+  const { todoId } = request.params;
+  const { userId } = request;
+  const { title, priority, status, category } = request.body;
+
+  const updateTodoQuery = `
+    UPDATE todos
+    SET 
+      title = ?, 
+      priority = ?, 
+      status = ?, 
+      category = ?
+    WHERE 
+      id = ? AND user_id = ?;
+  `;
+
+  try {
+      const result = await db.run(updateTodoQuery, [title, priority, status, category, todoId, userId]);
+      if (result.changes > 0) {
+          response.send("Todo Successfully Updated");
+      } else {
+          response.status(404).send("Todo Not Found");
+      }
+  } catch (error) {
+      console.error("Error updating todo:", error);
+      response.status(500).send("Internal server error");
+  }
+});
+
+// Delete Todo API
+app.delete("/todos/:todoId", authenticateToken, async (request, response) => {
+  const { todoId } = request.params;
+  const { userId } = request;
+
+  const deleteTodoQuery = `
+    DELETE FROM todos
+    WHERE id = ? AND user_id = ?;
+  `;
+
+  try {
+      const result = await db.run(deleteTodoQuery, [todoId, userId]);
+      if (result.changes > 0) {
+          response.send("Todo Successfully Deleted");
+      } else {
+          response.status(404).send("Todo Not Found");
+      }
+  } catch (error) {
+      console.error("Error deleting todo:", error);
+      response.status(500).send("Internal server error");
+  }
+});
+
+// Update Todo Status API
+app.patch("/todos/:todoId/status", authenticateToken, async (request, response) => {
+  const { todoId } = request.params;
+  const { userId } = request;
+  const { status } = request.body;
+
+  const updateStatusQuery = `
+    UPDATE todos
+    SET status = ?
+    WHERE id = ? AND user_id = ?;
+  `;
+
+  try {
+      const result = await db.run(updateStatusQuery, [status, todoId, userId]);
+      if (result.changes > 0) {
+          response.send("Todo Status Updated Successfully");
+      } else {
+          response.status(404).send("Todo Not Found");
+      }
+  } catch (error) {
+      console.error("Error updating status:", error);
+      response.status(500).send("Internal server error");
+  }
+});
+
+// Get User Profile API
+app.get("/profile/", authenticateToken, async (request, response) => {
+  const { userId } = request;
+
+  const getUserProfileQuery = `
+    SELECT id, name, email
+    FROM users
+    WHERE id = ?;
+  `;
+
+  try {
+      const user = await db.get(getUserProfileQuery, [userId]);
+      if (user) {
+          response.send(user);
+      } else {
+          response.status(404).send("User Not Found");
+      }
+  } catch (error) {
+      console.error("Error fetching user profile:", error);
+      response.status(500).send("Internal server error");
+  }
+});
+
+// Update User Profile API
+app.put("/profile/", authenticateToken, async (request, response) => {
+  const { userId } = request;
+  const { name, email, password } = request.body;
+
+  let hashedPassword;
+  if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+  }
+
+  const updateUserProfileQuery = `
+    UPDATE users
+    SET 
+      name = ?, 
+      email = ?, 
+      password = COALESCE(?, password)
+    WHERE id = ?;
+  `;
+
+  try {
+      await db.run(updateUserProfileQuery, [name, email, hashedPassword, userId]);
+      response.send("Profile Updated Successfully");
+  } catch (error) {
+      console.error("Error updating user profile:", error);
+      response.status(500).send("Internal server error");
+  }
+});
+
+// Delete User Profile API
+app.delete("/profile/", authenticateToken, async (request, response) => {
+  const { userId } = request;
+
+  const deleteUserQuery = `
+    DELETE FROM users
+    WHERE id = ?;
+  `;
+
+  try {
+      const result = await db.run(deleteUserQuery, [userId]);
+      if (result.changes > 0) {
+          response.send("User Profile Deleted Successfully");
+      } else {
+          response.status(404).send("User Not Found");
+      }
+  } catch (error) {
+      console.error("Error deleting user profile:", error);
+      response.status(500).send("Internal server error");
+  }
+});
